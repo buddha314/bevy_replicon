@@ -6,7 +6,8 @@ use bevy::{
         query::FilteredAccess,
         storage::{Column, ComponentSparseSet, TableId},
         system::{
-            ReadOnlySystemParam, SystemAccess, SystemMeta, SystemParam, SystemParamValidationError,
+            ReadOnlySystemParam, SystemAccess, SystemMeta, SystemParam, SystemParamAccessConflict,
+            SystemParamValidationError,
         },
         world::unsafe_world_cell::UnsafeWorldCell,
     },
@@ -164,19 +165,16 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
 
     fn init_access(
         state: &Self::State,
-        system_meta: &mut SystemMeta,
+        _system_meta: &mut SystemMeta,
         system_access: &mut SystemAccess,
-        _world: &mut World,
-    ) {
-        match system_access.try_add(state.component_access.clone()) {
-            Ok(()) => {}
-            Err(_) => {
-                panic!(
-                    "replicated components in system `{}` shouldn't be in conflict with other system parameters",
-                    system_meta.name(),
-                );
-            }
-        }
+    ) -> Result<(), SystemParamAccessConflict> {
+        system_access
+            .try_extend_single(state.component_access.clone())
+            .map_err(|access| {
+                SystemParamAccessConflict::new::<Self>(access).with_suggestion(
+                    "replicated components shouldn't be in conflict with other system parameters",
+                )
+            })
     }
 
     unsafe fn get_param<'world, 'state>(

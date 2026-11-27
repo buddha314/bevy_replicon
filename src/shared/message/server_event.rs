@@ -1,6 +1,7 @@
 use core::any::TypeId;
 
-use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
+use bevy::{
+    ecs::event::EventTriggerState,ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
 use log::debug;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -25,9 +26,10 @@ pub trait ServerEventAppExt {
     /// then `E` event will be emitted on the server as well.
     ///
     /// See also the [corresponding section](crate#from-client-to-server) from the quick start guide.
-    fn add_server_event<'a, E>(&mut self, channel: Channel) -> &mut Self
+    fn add_server_event<E>(&mut self, channel: Channel) -> &mut Self
     where
-        E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned,
+        E: Event + Serialize + DeserializeOwned,
+        EventTriggerState<'static, E>: Default,
     {
         self.add_server_event_with(
             channel,
@@ -40,9 +42,10 @@ pub trait ServerEventAppExt {
     ///
     /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_server_event<'a, E>(&mut self, channel: Channel) -> &mut Self
+    fn add_mapped_server_event<E>(&mut self, channel: Channel) -> &mut Self
     where
-        E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned + MapEntities,
+        E: Event + Serialize + DeserializeOwned + MapEntities,
+        EventTriggerState<'static, E>: Default,
     {
         self.add_server_event_with(
             channel,
@@ -54,24 +57,30 @@ pub trait ServerEventAppExt {
     /// Same as [`Self::add_server_event`], but uses the specified functions for serialization and deserialization.
     ///
     /// See also [`ServerMessageAppExt::add_server_message_with`].
-    fn add_server_event_with<'a, E: Event<Trigger<'a>: Default>>(
+    fn add_server_event_with<E: Event>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ServerSendCtx, E>,
         deserialize: DeserializeFn<ClientReceiveCtx, E>,
-    ) -> &mut Self;
+    ) -> &mut Self
+    where
+        EventTriggerState<'static, E>: Default,
+    ;
 
     /// Like [`ServerMessageAppExt::make_message_independent`], but for triggers.
     fn make_event_independent<E: Event>(&mut self) -> &mut Self;
 }
 
 impl ServerEventAppExt for App {
-    fn add_server_event_with<'a, E: Event<Trigger<'a>: Default>>(
+    fn add_server_event_with<E: Event>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ServerSendCtx, E>,
         deserialize: DeserializeFn<ClientReceiveCtx, E>,
-    ) -> &mut Self {
+    ) -> &mut Self
+    where
+        EventTriggerState<'static, E>: Default,
+    {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
             .add_server_event::<E>();
@@ -125,11 +134,14 @@ pub(crate) struct ServerEvent {
 }
 
 impl ServerEvent {
-    fn new<'a, E: Event<Trigger<'a>: Default>>(
+    fn new<E: Event>(
         app: &mut App,
         channel: Channel,
         fns: MessageFns<ServerSendCtx, ClientReceiveCtx, ServerTriggerEvent<E>, E>,
-    ) -> Self {
+    ) -> Self
+    where
+        EventTriggerState<'static, E>: Default,
+    {
         Self {
             type_id: TypeId::of::<E>(),
             message: ServerMessage::new(app, channel, fns),
@@ -152,10 +164,13 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that `messages` is [`Messages<ServerTriggerEvent<E>>`].
-    unsafe fn trigger_typed<'a, E: Event<Trigger<'a>: Default>>(
+    unsafe fn trigger_typed<E: Event>(
         commands: &mut Commands,
         messages: PtrMut,
-    ) {
+    )
+    where
+        EventTriggerState<'static, E>: Default,
+    {
         let messages: &mut Messages<ServerTriggerEvent<E>> = unsafe { messages.deref_mut() };
         for message in messages.drain() {
             debug!("triggering `{}`", ShortName::of::<E>());

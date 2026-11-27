@@ -320,7 +320,7 @@ fn invalidate_scan<E: EventPattern>(_: On<E>, mut scan: ResMut<ReplicationScan>)
 fn invalidate_archetypes<E>(event: On<E>, mut scan: ResMut<ReplicationScan>)
 where
     E: EventPattern,
-    E::Event: for<'a> Event<Trigger<'a> = EntityComponentsTrigger<'a>>,
+    E::Event: EntityEvent<Trigger = EntityComponentsTrigger<'static>>,
 {
     scan.invalidate_archetype(event.trigger().new_archetype);
 }

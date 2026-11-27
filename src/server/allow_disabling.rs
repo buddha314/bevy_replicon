@@ -1,11 +1,11 @@
 use bevy::{
     ecs::{
-        archetype::Archetype,
+        archetype::{Archetype, ArchetypeId},
         change_detection::Tick,
         component::{ComponentId, Components},
         entity_disabling::DefaultQueryFilters,
         query::{FilteredAccess, FilteredAccessSet, QueryFilter, WorldQuery},
-        storage::{Table, TableRow},
+        storage::{Table, TableId, TableRow},
         world::unsafe_world_cell::UnsafeWorldCell,
     },
     prelude::*,
@@ -34,10 +34,18 @@ unsafe impl WorldQuery for AllowDisabling {
     const IS_DENSE: bool = true;
 
     #[inline]
-    unsafe fn set_archetype(_: &mut (), _: &Self::State, _: &Archetype, _: &Table) {}
+    unsafe fn set_archetype(
+        _: &mut (),
+        _: &Self::State,
+        _: ArchetypeId,
+        _: &Archetype,
+        _: TableId,
+        _: &Table,
+    ) {
+    }
 
     #[inline]
-    unsafe fn set_table(_: &mut (), _: &Self::State, _: &Table) {}
+    unsafe fn set_table(_: &mut (), _: &Self::State, _: TableId, _: &Table) {}
 
     fn update_component_access(state: &Self::State, access: &mut FilteredAccess) {
         for &id in state {
@@ -47,10 +55,9 @@ unsafe impl WorldQuery for AllowDisabling {
 
     fn init_nested_access(
         _state: &Self::State,
-        _system_name: Option<&str>,
         _component_access_set: &mut FilteredAccessSet,
-        _world: UnsafeWorldCell,
-    ) {
+    ) -> Result<(), FilteredAccessSet> {
+        Ok(())
     }
 
     fn init_state(world: &mut World) -> Self::State {
@@ -75,6 +82,11 @@ unsafe impl WorldQuery for AllowDisabling {
 // SAFETY: the `WorldQuery` impl performs no access.
 unsafe impl QueryFilter for AllowDisabling {
     const IS_ARCHETYPAL: bool = true;
+
+    #[inline(always)]
+    unsafe fn filter_table(_: &Self::State, _: &mut Self::Fetch<'_>) -> bool {
+        true
+    }
 
     #[inline(always)]
     unsafe fn filter_fetch(
